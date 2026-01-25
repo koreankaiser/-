@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { Plus, ChevronRight, TrendingUp } from 'lucide-react';
+import { Plus, ChevronRight, TrendingUp, Info } from 'lucide-react';
 import Layout from '../components/Layout';
 import { MOCK_BOOKS, MOCK_USER } from '../constants';
 import { Link } from 'react-router-dom';
@@ -9,20 +9,42 @@ import { Book } from '../types';
 
 const Dashboard: React.FC = () => {
   const [books, setBooks] = useState<Book[]>(MOCK_BOOKS);
+  const [isDemo, setIsDemo] = useState(true);
 
   useEffect(() => {
-    const fetchBooks = async () => {
-      // 실제 Supabase 연동 시:
-      // const { data, error } = await supabase.from('books').select('*').eq('uploaderId', (await supabase.auth.getUser()).data.user?.id);
-      // if (!error && data) setBooks(data);
-      console.log('Supabase connection ready. Fetch logic goes here.');
+    const checkSupabase = async () => {
+      const url = (process.env as any).SUPABASE_URL;
+      const key = (process.env as any).SUPABASE_ANON_KEY;
+      
+      if (url && key) {
+        setIsDemo(false);
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data, error } = await supabase
+            .from('books')
+            .select('*')
+            .eq('uploaderId', user.id);
+          if (!error && data && data.length > 0) {
+            setBooks(data);
+          }
+        }
+      }
     };
-    fetchBooks();
+    checkSupabase();
   }, []);
 
   return (
     <Layout>
       <div className="px-5 pt-8 space-y-8">
+        {isDemo && (
+          <div className="bg-orange-50 p-3 rounded-xl border border-orange-100 flex items-center space-x-2">
+            <Info size={16} className="text-orange-500" />
+            <p className="text-[11px] text-orange-700 font-medium">
+              현재 API 키가 설정되지 않아 데모 모드로 동작 중입니다. (Mock 데이터 표시)
+            </p>
+          </div>
+        )}
+
         {/* Header/Welcome */}
         <section>
           <div className="flex justify-between items-end mb-4">
@@ -45,9 +67,9 @@ const Dashboard: React.FC = () => {
             </Link>
           </div>
           
-          <div className="toss-card p-5">
+          <div className="space-y-4">
             {books.filter(b => b.status === 'READING').map(book => (
-              <div key={book.id} className="flex space-x-4">
+              <div key={book.id} className="toss-card p-5 flex space-x-4">
                 <img src={book.coverImage} alt={book.title} className="w-20 h-28 rounded-lg object-cover shadow-sm" />
                 <div className="flex-1 flex flex-col justify-between py-1">
                   <div>
