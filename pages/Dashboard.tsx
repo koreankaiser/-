@@ -10,38 +10,58 @@ import { Book } from '../types';
 const Dashboard: React.FC = () => {
   const [books, setBooks] = useState<Book[]>(MOCK_BOOKS);
   const [isDemo, setIsDemo] = useState(true);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const checkSupabase = async () => {
-      const url = (process.env as any).SUPABASE_URL;
-      const key = (process.env as any).SUPABASE_ANON_KEY;
-      
-      if (url && key) {
-        setIsDemo(false);
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (session?.user) {
+          setIsDemo(false);
           const { data, error } = await supabase
             .from('books')
             .select('*')
-            .eq('uploaderId', user.id);
+            .eq('uploaderId', session.user.id);
+            
           if (!error && data && data.length > 0) {
             setBooks(data);
           }
         }
+      } catch (err) {
+        console.error('Auth check failed:', err);
+      } finally {
+        setLoading(false);
       }
     };
     checkSupabase();
   }, []);
 
+  if (loading) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="animate-pulse flex flex-col items-center">
+            <div className="w-12 h-12 bg-gray-200 rounded-full mb-4"></div>
+            <div className="h-4 w-24 bg-gray-200 rounded"></div>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
   return (
     <Layout>
       <div className="px-5 pt-8 space-y-8">
         {isDemo && (
-          <div className="bg-orange-50 p-3 rounded-xl border border-orange-100 flex items-center space-x-2">
-            <Info size={16} className="text-orange-500" />
-            <p className="text-[11px] text-orange-700 font-medium">
-              현재 API 키가 설정되지 않아 데모 모드로 동작 중입니다. (Mock 데이터 표시)
-            </p>
+          <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100 flex items-start space-x-3">
+            <Info size={18} className="text-blue-500 mt-0.5" />
+            <div>
+              <p className="text-xs text-blue-800 font-bold mb-0.5">데모 모드 안내</p>
+              <p className="text-[11px] text-blue-600 leading-relaxed">
+                현재 Supabase 연결 전입니다. 미리 준비된 데이터를 통해 기능을 둘러보실 수 있습니다.
+              </p>
+            </div>
           </div>
         )}
 
@@ -68,28 +88,35 @@ const Dashboard: React.FC = () => {
           </div>
           
           <div className="space-y-4">
-            {books.filter(b => b.status === 'READING').map(book => (
-              <div key={book.id} className="toss-card p-5 flex space-x-4">
-                <img src={book.coverImage} alt={book.title} className="w-20 h-28 rounded-lg object-cover shadow-sm" />
-                <div className="flex-1 flex flex-col justify-between py-1">
-                  <div>
-                    <h4 className="font-bold text-lg leading-tight">{book.title}</h4>
-                    <p className="text-gray-400 text-sm">{book.author}</p>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="w-full bg-gray-100 h-2 rounded-full">
-                      <div className="bg-blue-500 h-2 rounded-full w-[65%]"></div>
+            {books.filter(b => b.status === 'READING').length > 0 ? (
+              books.filter(b => b.status === 'READING').map(book => (
+                <div key={book.id} className="toss-card p-5 flex space-x-4">
+                  <img src={book.coverImage} alt={book.title} className="w-20 h-28 rounded-lg object-cover shadow-sm" />
+                  <div className="flex-1 flex flex-col justify-between py-1">
+                    <div>
+                      <h4 className="font-bold text-lg leading-tight">{book.title}</h4>
+                      <p className="text-gray-400 text-sm">{book.author}</p>
                     </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs text-blue-600 font-bold">65% 읽음</span>
-                      <Link to="/reading-status" className="text-xs text-gray-400 flex items-center">
-                        기록하기 <ChevronRight size={12} />
-                      </Link>
+                    <div className="space-y-2">
+                      <div className="w-full bg-gray-100 h-2 rounded-full">
+                        <div className="bg-blue-500 h-2 rounded-full w-[65%]"></div>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-blue-600 font-bold">65% 읽음</span>
+                        <Link to="/reading-status" className="text-xs text-gray-400 flex items-center">
+                          기록하기 <ChevronRight size={12} />
+                        </Link>
+                      </div>
                     </div>
                   </div>
                 </div>
+              ))
+            ) : (
+              <div className="toss-card p-10 text-center">
+                <p className="text-gray-400 text-sm">등록된 책이 없습니다.</p>
+                <Link to="/book-upload" className="text-blue-600 text-xs font-bold mt-2 inline-block">첫 책 등록하기</Link>
               </div>
-            ))}
+            )}
           </div>
         </section>
 
