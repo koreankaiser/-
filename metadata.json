@@ -1,0 +1,7 @@
+{
+  "name": "BookBuddy",
+  "description": "A high-trust, minimalist community platform for matching book enthusiasts, inspired by Toss UI style.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
