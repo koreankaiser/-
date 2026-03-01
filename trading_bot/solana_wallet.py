@@ -4,6 +4,7 @@ Solana 지갑 관리 모듈
 
 import base58
 from solders.keypair import Keypair
+from solders.pubkey import Pubkey
 from solana.rpc.async_api import AsyncClient
 from config import WALLET_PRIVATE_KEY, SOLANA_RPC_URL
 
@@ -16,7 +17,8 @@ def load_keypair() -> Keypair:
 
 async def get_sol_balance(client: AsyncClient, pubkey: str) -> float:
     """SOL 잔액 조회 (SOL 단위)"""
-    response = await client.get_balance(pubkey)
+    pubkey_obj = Pubkey.from_string(pubkey)
+    response = await client.get_balance(pubkey_obj)
     lamports = response.value
     return lamports / 1_000_000_000
 

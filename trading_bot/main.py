@@ -8,6 +8,7 @@ Solana 밈코인 자동매매 봇
 """
 
 import asyncio
+import ctypes
 import sys
 from solana.rpc.async_api import AsyncClient
 
@@ -22,6 +23,18 @@ from config import (
 from solana_wallet import load_keypair, get_sol_balance, create_rpc_client
 from position_manager import PositionManager
 from telegram_listener import SignalListener
+
+
+def prevent_sleep():
+    """Windows 절전 모드 및 화면 꺼짐 방지"""
+    if sys.platform == "win32":
+        ES_CONTINUOUS = 0x80000000
+        ES_SYSTEM_REQUIRED = 0x00000001
+        ES_DISPLAY_REQUIRED = 0x00000002
+        ctypes.windll.kernel32.SetThreadExecutionState(
+            ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED
+        )
+        print("[시스템] 절전 모드 및 화면 꺼짐 방지 활성화")
 
 
 def print_banner(balance: float):
@@ -41,6 +54,9 @@ def print_banner(balance: float):
 
 
 async def main():
+    # 절전 모드 방지
+    prevent_sleep()
+
     # 지갑 로드
     try:
         keypair = load_keypair()
