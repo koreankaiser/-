@@ -11,26 +11,36 @@ import asyncio
 import sys
 from solana.rpc.async_api import AsyncClient
 
-from config import TRADE_AMOUNT_SOL, TAKE_PROFIT_RATIO, STOP_LOSS_RATIO, SIGNAL_SOURCE
+from config import (
+    SIGNAL_SOURCES,
+    TRADE_AMOUNT_PCT,
+    TAKE_PROFIT_RATIO,
+    STOP_LOSS_RATIO,
+    SLIPPAGE_BPS,
+    FEE_ESTIMATE_BPS,
+)
 from solana_wallet import load_keypair, get_sol_balance, create_rpc_client
 from position_manager import PositionManager
 from telegram_listener import SignalListener
 
 
-def print_banner():
-    print("=" * 50)
+def print_banner(balance: float):
+    trade_sol = balance * TRADE_AMOUNT_PCT
+    print("=" * 58)
     print("  Solana 밈코인 자동매매 봇")
-    print("=" * 50)
-    print(f"  시그널 소스:  {SIGNAL_SOURCE}")
-    print(f"  매매 금액:    {TRADE_AMOUNT_SOL} SOL / 시그널")
+    print("=" * 58)
+    print(f"  모니터링 채널 ({len(SIGNAL_SOURCES)}개):")
+    for src in SIGNAL_SOURCES:
+        print(f"    • {src}")
+    print(f"  투자 비율:    {TRADE_AMOUNT_PCT * 100:.0f}% / 시그널 (복리식)")
+    print(f"  현재 잔액:    {balance:.4f} SOL → 시그널당 {trade_sol:.4f} SOL")
     print(f"  익절 목표:    +{TAKE_PROFIT_RATIO * 100:.0f}%")
     print(f"  손절 기준:    -{STOP_LOSS_RATIO * 100:.0f}%")
-    print("=" * 50)
+    print(f"  슬리피지:     {SLIPPAGE_BPS / 100:.1f}% | 수수료 추정: {FEE_ESTIMATE_BPS / 100:.1f}%")
+    print("=" * 58)
 
 
 async def main():
-    print_banner()
-
     # 지갑 로드
     try:
         keypair = load_keypair()
@@ -44,13 +54,22 @@ async def main():
     rpc_client = create_rpc_client()
 
     # SOL 잔액 확인
+    balance = 0.0
     try:
         balance = await get_sol_balance(rpc_client, str(keypair.pubkey()))
-        print(f"[Wallet] SOL 잔액: {balance:.4f} SOL")
-        if balance < TRADE_AMOUNT_SOL:
-            print(f"[경고] 잔액({balance:.4f} SOL)이 매매 금액({TRADE_AMOUNT_SOL} SOL)보다 적습니다!")
     except Exception as e:
         print(f"[경고] 잔액 조회 실패: {e}")
+
+    print_banner(balance)
+
+    min_trade = 0.001
+    trade_sol = balance * TRADE_AMOUNT_PCT
+    if trade_sol < min_trade:
+        print(f"[경고] 투자 가능 금액({trade_sol:.6f} SOL)이 너무 적습니다. SOL을 충전하세요.")
+
+    if not SIGNAL_SOURCES:
+        print("[오류] SIGNAL_SOURCES가 설정되지 않았습니다. .env 파일을 확인하세요.")
+        sys.exit(1)
 
     # 포지션 매니저 생성 및 모니터링 시작
     position_manager = PositionManager(keypair, rpc_client)

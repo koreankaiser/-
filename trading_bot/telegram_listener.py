@@ -1,8 +1,8 @@
 """
 텔레그램 시그널 리스너
 
-Telethon을 사용하여 특정 봇/채널의 메시지를 모니터링하고
-시그널 감지 시 매매를 실행합니다.
+Telethon을 사용하여 여러 채널/봇의 메시지를 동시에 모니터링하고
+시그널 감지 시 현재 자산의 10%로 자동 매수 (복리식)
 """
 
 from datetime import datetime
@@ -12,11 +12,12 @@ from telethon.tl.types import User, Channel
 from config import (
     TELEGRAM_API_ID,
     TELEGRAM_API_HASH,
-    SIGNAL_SOURCE,
-    TRADE_AMOUNT_SOL,
+    SIGNAL_SOURCES,
+    TRADE_AMOUNT_PCT,
 )
 from signal_parser import parse_signal
 from position_manager import Position, PositionManager
+from solana_wallet import get_sol_balance
 import jupiter_client
 
 
@@ -28,25 +29,36 @@ class SignalListener:
         self.client = TelegramClient("trading_bot_session", TELEGRAM_API_ID, TELEGRAM_API_HASH)
 
     async def start(self):
-        """텔레그램 클라이언트 시작 및 이벤트 핸들러 등록"""
+        """텔레그램 클라이언트 시작 및 다중 채널 이벤트 핸들러 등록"""
         await self.client.start()
         print("[Telegram] 로그인 성공")
 
-        # 시그널 소스 정보 출력
-        entity = await self.client.get_entity(SIGNAL_SOURCE)
-        if isinstance(entity, User):
-            name = entity.username or entity.first_name
-        elif isinstance(entity, Channel):
-            name = entity.title
-        else:
-            name = SIGNAL_SOURCE
-        print(f"[Telegram] 시그널 소스 감지: {name}")
+        # 각 시그널 채널 접근 확인
+        valid_sources = []
+        for source in SIGNAL_SOURCES:
+            try:
+                entity = await self.client.get_entity(source)
+                if isinstance(entity, User):
+                    name = entity.username or entity.first_name
+                elif isinstance(entity, Channel):
+                    name = entity.title
+                else:
+                    name = source
+                print(f"[Telegram] ✓ 채널 연결: {name} (@{source})")
+                valid_sources.append(source)
+            except Exception as e:
+                print(f"[Telegram] ✗ 채널 접근 실패: {source} → {e}")
 
-        @self.client.on(events.NewMessage(from_users=SIGNAL_SOURCE))
+        if not valid_sources:
+            print("[Telegram] 연결 가능한 채널이 없습니다. 설정을 확인하세요.")
+            return
+
+        # 모든 유효 채널을 한 번에 구독
+        @self.client.on(events.NewMessage(chats=valid_sources))
         async def handle_message(event):
             await self._process_message(event.message.text)
 
-        print(f"[Telegram] 시그널 대기 중... (소스: {SIGNAL_SOURCE})")
+        print(f"\n[Telegram] 시그널 대기 중... (활성 채널: {len(valid_sources)}/{len(SIGNAL_SOURCES)}개)")
         await self.client.run_until_disconnected()
 
     async def _process_message(self, text: str):
@@ -67,12 +79,29 @@ class SignalListener:
             await self._execute_sell(signal)
 
     async def _execute_buy(self, signal):
-        """매수 실행"""
+        """매수 실행 — 현재 SOL 잔액의 10%를 복리식으로 투자"""
         if self.position_manager.has_position(signal.mint_address):
             print(f"[Buy] ${signal.token_name} 이미 포지션 보유 중, 스킵")
             return
 
-        print(f"[Buy] ${signal.token_name} 매수 시작: {TRADE_AMOUNT_SOL} SOL")
+        # 현재 SOL 잔액 조회 후 비율 계산 (복리식)
+        try:
+            balance = await get_sol_balance(self.rpc_client, str(self.keypair.pubkey()))
+        except Exception as e:
+            print(f"[Buy] SOL 잔액 조회 실패: {e}, 매수 취소")
+            return
+
+        trade_sol = round(balance * TRADE_AMOUNT_PCT, 6)
+
+        if trade_sol < 0.001:
+            print(f"[Buy] SOL 잔액 부족 ({balance:.4f} SOL → 투자 예정 {trade_sol:.6f} SOL), 매수 취소")
+            return
+
+        print(
+            f"[Buy] ${signal.token_name} 매수 시작 | "
+            f"현재 잔액: {balance:.4f} SOL | "
+            f"투자 금액: {trade_sol:.4f} SOL ({TRADE_AMOUNT_PCT * 100:.0f}%)"
+        )
 
         # 현재 가격 조회 (진입가 기록용)
         entry_price = await jupiter_client.get_token_price(signal.mint_address)
@@ -85,7 +114,7 @@ class SignalListener:
             self.keypair,
             self.rpc_client,
             signal.mint_address,
-            TRADE_AMOUNT_SOL,
+            trade_sol,
         )
 
         if not tx_sig:
@@ -107,7 +136,7 @@ class SignalListener:
             token_name=signal.token_name,
             entry_price=entry_price,
             entry_time=datetime.now(),
-            sol_invested=TRADE_AMOUNT_SOL,
+            sol_invested=trade_sol,
             token_amount=token_amount or 0,
             tx_signature=tx_sig,
         )

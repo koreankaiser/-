@@ -1,7 +1,8 @@
 """
 포지션 관리 및 자동 TP/SL 모니터링
 
-매수 후 포지션을 추적하고, +30% 익절 / -30% 손절 도달 시 자동 매도
+매수 후 포지션을 추적하고, +20% 익절 / -30% 손절 도달 시 자동 매도
+수수료 추정(FEE_ESTIMATE_BPS)을 실제 순손익 계산에 반영하여 표시
 """
 
 import asyncio
@@ -13,7 +14,7 @@ from solders.keypair import Keypair
 from solana.rpc.async_api import AsyncClient
 
 import jupiter_client
-from config import TAKE_PROFIT_RATIO, STOP_LOSS_RATIO, PRICE_CHECK_INTERVAL
+from config import TAKE_PROFIT_RATIO, STOP_LOSS_RATIO, PRICE_CHECK_INTERVAL, FEE_ESTIMATE_BPS
 
 
 @dataclass
@@ -39,8 +40,10 @@ class PositionManager:
         """새 포지션 추가"""
         self.positions[position.mint_address] = position
         print(
-            f"[Position] 포지션 추가: ${position.token_name} "
-            f"진입가 ${position.entry_price:.8f}"
+            f"[Position] 포지션 추가: ${position.token_name} | "
+            f"진입가 ${position.entry_price:.8f} | "
+            f"투자 {position.sol_invested:.4f} SOL | "
+            f"TP +{TAKE_PROFIT_RATIO * 100:.0f}% / SL -{STOP_LOSS_RATIO * 100:.0f}%"
         )
 
     def has_position(self, mint_address: str) -> bool:
@@ -52,7 +55,10 @@ class PositionManager:
         """백그라운드 TP/SL 모니터링 시작"""
         if self._monitoring_task is None or self._monitoring_task.done():
             self._monitoring_task = asyncio.create_task(self._monitor_loop())
-            print("[Position] TP/SL 모니터링 시작")
+            print(
+                f"[Position] TP/SL 모니터링 시작 "
+                f"(간격: {PRICE_CHECK_INTERVAL}s | 수수료 추정: {FEE_ESTIMATE_BPS / 100:.1f}%)"
+            )
 
     async def _monitor_loop(self):
         """주기적으로 모든 활성 포지션의 가격을 확인"""
@@ -75,25 +81,31 @@ class PositionManager:
             print(f"[Position] {position.token_name} 가격 조회 실패")
             return
 
+        # 원가 기준 손익률
         pnl_ratio = (current_price - position.entry_price) / position.entry_price
         pnl_pct = pnl_ratio * 100
+
+        # 순손익: 슬리피지+수수료 추정 차감 (매도 시 발생하는 비용)
+        exit_fee_rate = FEE_ESTIMATE_BPS / 10000
+        net_pnl_pct = (pnl_ratio - exit_fee_rate) * 100
 
         print(
             f"[Position] ${position.token_name} | "
             f"진입가: ${position.entry_price:.8f} | "
             f"현재가: ${current_price:.8f} | "
-            f"손익: {pnl_pct:+.1f}%"
+            f"손익: {pnl_pct:+.1f}% (수수료 후 {net_pnl_pct:+.1f}%)"
         )
 
         should_sell = False
         reason = ""
 
+        # TP/SL 트리거는 원가 기준 손익률로 판단 (슬리피지 별도 표시)
         if pnl_ratio >= TAKE_PROFIT_RATIO:
             should_sell = True
-            reason = f"익절 +{pnl_pct:.1f}%"
+            reason = f"익절 +{pnl_pct:.1f}% (순손익 약 {net_pnl_pct:+.1f}%)"
         elif pnl_ratio <= -STOP_LOSS_RATIO:
             should_sell = True
-            reason = f"손절 {pnl_pct:.1f}%"
+            reason = f"손절 {pnl_pct:.1f}% (순손익 약 {net_pnl_pct:+.1f}%)"
 
         if should_sell:
             await self._close_position(position, reason)
