@@ -37,9 +37,15 @@ def parse_signal(message: str) -> Optional[TradeSignal]:
     if not message:
         return None
 
-    # BUY 시그널 감지 (NEW-LAUNCH SIGNAL)
-    is_buy = "NEW-LAUNCH SIGNAL" in message or "NEW LAUNCH" in message.upper()
-    is_sell = "SELL" in message.upper() and "NEW-LAUNCH" not in message
+    # BUY 시그널 감지 (NEW-LAUNCH SIGNAL, APE SIGNAL 등)
+    msg_upper = message.upper()
+    is_buy = (
+        "NEW-LAUNCH SIGNAL" in message
+        or "NEW LAUNCH" in msg_upper
+        or "APE SIGNAL" in msg_upper
+        or "SIGNAL DETECTED" in msg_upper
+    )
+    is_sell = "SELL" in msg_upper and "NEW-LAUNCH" not in message and "APE SIGNAL" not in msg_upper
 
     if not (is_buy or is_sell):
         return None

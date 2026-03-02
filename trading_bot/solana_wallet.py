@@ -4,9 +4,13 @@ Solana 지갑 관리 모듈
 
 import base58
 from solders.keypair import Keypair
-from solders.pubkey import Pubkey
 from solana.rpc.async_api import AsyncClient
 from config import WALLET_PRIVATE_KEY, SOLANA_RPC_URL
+
+try:
+    from solders.pubkey import Pubkey
+except ImportError:
+    from solana.publickey import PublicKey as Pubkey  # type: ignore
 
 
 def load_keypair() -> Keypair:
