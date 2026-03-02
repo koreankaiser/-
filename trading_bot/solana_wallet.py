@@ -7,11 +7,6 @@ from solders.keypair import Keypair
 from solana.rpc.async_api import AsyncClient
 from config import WALLET_PRIVATE_KEY, SOLANA_RPC_URL
 
-try:
-    from solders.pubkey import Pubkey
-except ImportError:
-    from solana.publickey import PublicKey as Pubkey  # type: ignore
-
 
 def load_keypair() -> Keypair:
     """Private Key에서 Keypair 로드"""
@@ -19,10 +14,9 @@ def load_keypair() -> Keypair:
     return Keypair.from_bytes(private_key_bytes)
 
 
-async def get_sol_balance(client: AsyncClient, pubkey: str) -> float:
-    """SOL 잔액 조회 (SOL 단위)"""
-    pubkey_obj = Pubkey.from_string(pubkey)
-    response = await client.get_balance(pubkey_obj)
+async def get_sol_balance(client: AsyncClient, pubkey) -> float:
+    """SOL 잔액 조회 (SOL 단위) — Pubkey 객체 또는 문자열 모두 허용"""
+    response = await client.get_balance(pubkey)
     lamports = response.value
     return lamports / 1_000_000_000
 

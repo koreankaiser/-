@@ -72,7 +72,7 @@ async def main():
     # SOL 잔액 확인
     balance = 0.0
     try:
-        balance = await get_sol_balance(rpc_client, str(keypair.pubkey()))
+        balance = await get_sol_balance(rpc_client, keypair.pubkey())
     except Exception as e:
         print(f"[경고] 잔액 조회 실패: {e}")
 

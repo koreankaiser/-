@@ -86,7 +86,7 @@ class SignalListener:
 
         # 현재 SOL 잔액 조회 후 비율 계산 (복리식)
         try:
-            balance = await get_sol_balance(self.rpc_client, str(self.keypair.pubkey()))
+            balance = await get_sol_balance(self.rpc_client, self.keypair.pubkey())
         except Exception as e:
             print(f"[Buy] SOL 잔액 조회 실패: {e}, 매수 취소")
             return
