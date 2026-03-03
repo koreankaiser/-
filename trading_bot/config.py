@@ -29,10 +29,10 @@ SLIPPAGE_BPS = int(os.getenv("SLIPPAGE_BPS", "300"))                # 슬리피�
 # 실제 익절/손절 P&L 표시에 반영 (트리거 기준은 원가 기준 유지)
 FEE_ESTIMATE_BPS = int(os.getenv("FEE_ESTIMATE_BPS", "100"))        # 수수료 추정 ~1%
 
-# Jupiter API
-JUPITER_QUOTE_URL = "https://quote-api.jup.ag/v6/quote"
-JUPITER_SWAP_URL = "https://quote-api.jup.ag/v6/swap"
-JUPITER_PRICE_URL = "https://price.jup.ag/v4/price"
+# Jupiter API (v1 - 신규 엔드포인트)
+JUPITER_QUOTE_URL = "https://api.jup.ag/swap/v1/quote"
+JUPITER_SWAP_URL = "https://api.jup.ag/swap/v1/swap"
+JUPITER_PRICE_URL = "https://api.jup.ag/price/v2"
 
 # SOL 토큰 민트 주소
 SOL_MINT = "So11111111111111111111111111111111111111112"

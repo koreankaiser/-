@@ -25,18 +25,25 @@ from config import (
 async def get_token_price(mint_address: str) -> Optional[float]:
     """
     Jupiter Price API로 토큰 가격 조회 (USD 기준)
+    실패 시 None 반환 (API 키 없거나 네트워크 오류 포함)
     """
-    async with httpx.AsyncClient(timeout=10) as client:
-        response = await client.get(
-            JUPITER_PRICE_URL,
-            params={"ids": mint_address},
-        )
-        response.raise_for_status()
-        data = response.json()
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            response = await client.get(
+                JUPITER_PRICE_URL,
+                params={"ids": mint_address},
+            )
+            if response.status_code != 200:
+                print(f"[Jupiter] 가격 조회 실패 (무시): {response.status_code}")
+                return None
+            data = response.json()
+    except Exception as e:
+        print(f"[Jupiter] 가격 조회 오류 (무시): {e}")
+        return None
 
     price_data = data.get("data", {}).get(mint_address)
     if price_data:
-        return float(price_data["price"])
+        return float(price_data.get("price", 0) or 0) or None
     return None
 
 
@@ -62,12 +69,16 @@ async def get_quote(
         "asLegacyTransaction": "false",
     }
 
-    async with httpx.AsyncClient(timeout=15) as client:
-        response = await client.get(JUPITER_QUOTE_URL, params=params)
-        if response.status_code != 200:
-            print(f"[Jupiter] Quote 실패: {response.status_code} {response.text}")
-            return None
-        return response.json()
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            response = await client.get(JUPITER_QUOTE_URL, params=params)
+            if response.status_code != 200:
+                print(f"[Jupiter] Quote 실패: {response.status_code} {response.text}")
+                return None
+            return response.json()
+    except Exception as e:
+        print(f"[Jupiter] Quote 연결 오류: {e}")
+        return None
 
 
 async def execute_swap(
